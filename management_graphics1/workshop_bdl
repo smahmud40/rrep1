@@ -1,0 +1,184 @@
+ library(dplyr)
+setwd ("E:/Research/R_practice")
+library(haven)
+df_wo<-read_dta("prac_wodata.dta")
+View(df_wo)
+str(df_wo)
+
+#####Variable generate######
+
+str(df_wo$D02)
+df_wo$D02<-as.numeric(df_wo$D02)
+str(df_wo$D02)
+table(df_wo$D02)
+?cut 
+df_wo$age_cat<-cut(df_wo$D02,
+                   breaks= c(-Inf, 19, 24, 29, 40),
+                   labels= c("15-19", "20-24", "25-29", "30+"))
+                  
+table(df_wo$age_cat)
+?ifelse
+
+##########generate two categories######
+
+df_wo$catage1<-ifelse(df_wo$D02<=24, "15-24", "24+")
+table(df_wo$catage1)
+
+#####Edu_cat)##########
+
+str(df_wo$D07)
+df_wo$D07<-as.numeric(df_wo$D07)
+table(df_wo$D07)
+df_wo$edu_cat<-cut(df_wo$D07,
+                   breaks = c(-Inf, 5, 10, Inf),
+                   labels = c("2-5", "6-10", "11+"))
+
+
+############Cross tabulation###########
+
+table(df_wo$edu_cat, df_wo$age_cat )
+
+#install.packages("gmodels")
+library(gmodels)
+
+CrossTable(df_wo$edu_cat, df_wo$age_cat,
+           digits = 3, 
+           prop.r = FALSE, 
+           prop.t = F,
+           prop.c = TRUE,
+           expected = F , 
+           prop.chisq = F,
+           chisq = F)
+
+table(df_wo$D05)
+####Summary Statistics###########
+
+mean(df_wo$D02)
+quantile(df_wo$D02,
+        probs = c(0.25, 0.75))
+summary(df_wo$edu_cat)
+
+
+
+mean(df_wo$D07, na.rm = TRUE)          #na.rm means remove NA row in the variable
+sd(df_wo$D07, na.rm = TRUE)
+
+#install.packages("dplyr")
+library(dplyr)
+
+fil<-filter(df_wo,!is.na(edu_cat))
+
+# An alternative
+df_wo %>%                                           # %>% piping data %>% f(y) = f(data,y)
+  filter(!is.na(edu_cat))%>%
+  group_by(edu_cat) %>%
+  summarise(n = n(),
+            ave = mean(D02, na.rm = TRUE),
+            std = sd(D02, na.rm = TRUE),
+            Mid = median(D02, na.rm = TRUE),
+            Min = min(D02, na.rm = TRUE),
+            Max = max(D02),
+            Quar_1st = quantile(D02, probs = 0.25),
+            Quar_3rd = quantile(D02, probs = 0.75))
+
+df_wo %>%                                           # %>% piping data %>% f(y) = f(data,y)
+  filter(!is.na(D07), !is.na (school_level))%>%
+  group_by(school_level) %>%
+  summarise(n = n(),
+            ave = mean(D07),
+            std = sd(D07),
+            Mid = median(D07),
+            Min = min(D07),
+            Max = max(D07),
+            Quar_1st = quantile(D07, probs = 0.25),
+            Quar_3rd = quantile(D07, probs = 0.75))
+
+summary(df_wo$D07, na.rm=TRUE)   ## is it right or wrong?
+summary(df_wo$D07)   
+mean(df_wo$D07, na.rm=TRUE)   
+
+CrossTable(df_wo$D03)
+
+# merging data files
+
+df_ch<-read_dta("prac_chdata.dta")
+str(df_ch)
+View(df_ch)
+df_both<- df_wo %>%
+  full_join(df_ch, by="Idno")
+
+
+df_both<- df_wo %>%
+  full_join(df_ch, by=c("Idno", "dist", "upz", "un", "vill", "bari",
+            "hh", "Woid"))
+
+View(df_both)
+
+##### finding difeerence between two data frames####
+#library(arsenal)
+#summary(comparedf(df_ch,df_wo))
+#intersect(names(df_wo), names(df_ch))  #this is another option
+
+##### Recoding variables####
+str(df_both$Q01)
+df_both$Q01<-as.numeric(df_both$Q01)
+
+df_both <- df_both %>%
+  mutate(Q01_new=recode(Q01, `1`="Yes", `2`="No", `9`="Unknown"),
+         Q01_new=if_else(is.na(Q01),0,Q01))
+
+df_both <- df_both %>%
+  mutate(Q05_new=recode(Q05, `1`="Chest_Prob", `2`="Blocked_Nose",`3`= "Both", `7`= "Others",`9`="Don't_Know"),
+         Q01_new=if_else(is.na(Q01),0,Q01))
+
+
+# df_both <- df_both %>%
+#   mutate(Q01_new = recode(Q01, `1` = "Yes",  `2` = "No" , `9` = "Unknown"),
+#          Q01_new = if_else(is.na(Q01) | Q01 == 2, 0, 1))
+
+#table(df_both$Q01_new)
+
+df_both <- df_both %>%
+  mutate(rel_cat=if_else(D08==1, "Muslim", "Non-Muslim")) %>%
+  rename(religion=rel_cat)
+
+table(df_both$religion)
+
+####Hypothesis testing####
+
+####t-test (2-sample mean test)
+
+df_both$age2cat<-ifelse(df_both$D02<=24, "15-24", "25+")
+table(df_both$age2cat)
+
+df_both %>%
+  group_by(age2cat) %>%
+  summarize(avg=mean(D07, na.rm=TRUE),
+            std=sd(D07, na.rm = TRUE))
+
+t.test(D07~age2cat, conf.level=0.99, data = df_both)
+
+#### Test for Correlation####
+df_both <-df_both %>%
+  mutate(sch_new=if_else(is.na(D07),0, D07))
+
+cor(df_both$D02, df_both$sch_new)
+
+cor(df_both$D02, df_both$D07,
+    use="complete.obs",
+    method = "pearson")
+
+cor.test(df_both$D07, df_both$D02, alternative = "two.sided")
+
+
+
+
+
+
+
+
+
+
+
+
+
